@@ -1,0 +1,18 @@
+{
+  "name": "mame-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP server exposing a headless MAME as debugging/reverse-engineering tools",
+  "license": "BSD-3-Clause",
+  "bin": { "mame-mcp": "src/index.mjs" },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "test": "node test/smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.23.8"
+  },
+  "engines": { "node": ">=18" }
+}
