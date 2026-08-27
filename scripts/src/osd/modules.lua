@@ -126,6 +126,7 @@ function osdmodulesbuild()
 		MAME_DIR .. "src/osd/modules/monitor/monitor_dxgi.cpp",
 		MAME_DIR .. "src/osd/modules/monitor/monitor_mac.cpp",
 		MAME_DIR .. "src/osd/modules/monitor/monitor_module.h",
+		MAME_DIR .. "src/osd/modules/monitor/monitor_none.cpp",
 		MAME_DIR .. "src/osd/modules/monitor/monitor_sdl.cpp",
 		MAME_DIR .. "src/osd/modules/monitor/monitor_win32.cpp",
 		MAME_DIR .. "src/osd/modules/netdev/netdev_common.cpp",

@@ -12,11 +12,15 @@
 #include "osdcore.h"
 #include "osdlib.h"
 
+// The headless OSD has no SDL at all; clipboard support is meaningless
+// without a display server, so it degrades to a no-op below.
+#ifndef OSD_HEADLESS
 #ifdef SDLMAME_SDL3
 #include <SDL3/SDL.h>
 #else
 #include <SDL2/SDL.h>
 #endif
+#endif // OSD_HEADLESS
 
 #include <csignal>
 #include <cstdio>
@@ -156,6 +160,9 @@ std::error_condition osd_set_clipboard_text(std::string_view text) noexcept
 
 std::string osd_get_clipboard_text() noexcept
 {
+#ifdef OSD_HEADLESS
+	return std::string();
+#else
 	// TODO: better error handling
 	std::string result;
 
@@ -175,6 +182,7 @@ std::string osd_get_clipboard_text() noexcept
 		}
 	}
 	return result;
+#endif // OSD_HEADLESS
 }
 
 
@@ -184,6 +192,9 @@ std::string osd_get_clipboard_text() noexcept
 
 std::error_condition osd_set_clipboard_text(std::string_view text) noexcept
 {
+#ifdef OSD_HEADLESS
+	return std::errc::not_supported;
+#else
 	try
 	{
 		std::string const clip(text); // need to do this to ensure there's a terminating NUL for SDL
@@ -203,6 +214,7 @@ std::error_condition osd_set_clipboard_text(std::string_view text) noexcept
 	{
 		return std::errc::not_enough_memory;
 	}
+#endif // OSD_HEADLESS
 }
 #endif
 
