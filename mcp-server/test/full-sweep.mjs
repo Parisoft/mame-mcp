@@ -26,9 +26,10 @@ const transport = new StdioClientTransport({
   args: [path.join(here, '..', 'src', 'index.mjs')],
   env: {
     ...process.env,
-    MAME_DIR: repoRoot,
-    MAME_BINARY: path.join(repoRoot, 'mametiny'),
-    MAME_ROMPATH: path.join(repoRoot, 'roms'),
+    // Respect the caller's environment; fall back to the repo defaults.
+    MAME_DIR: process.env.MAME_DIR || repoRoot,
+    MAME_BINARY: process.env.MAME_BINARY || path.join(repoRoot, 'mametiny'),
+    MAME_ROMPATH: process.env.MAME_ROMPATH || path.join(repoRoot, 'roms'),
   },
 });
 const client = new Client({ name: 'full-sweep', version: '1.0.0' }, { capabilities: {} });
