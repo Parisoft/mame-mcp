@@ -740,6 +740,213 @@ local function handlers_input_state(rpc)
 	})
 end
 
+
+--=================================================== graphics (phase 3)
+
+-- These wrap the luaengine_gfx.cpp bindings. MAME already knows how to
+-- decode each driver's graphics (the gfx_decode_entry layouts); until
+-- those bindings existed the only consumer was the interactive F4 tile
+-- viewer, so on a headless build the decoded pixels were unreachable.
+
+local function handlers_gfx(rpc)
+	local function gfx_sets(dev)
+		local ok, sets = pcall(function() return dev.gfx end)
+		if not ok or not sets then return {} end
+		return sets
+	end
+
+	reg(rpc, 'gfx', {
+		list_sets = function(p)
+			local out = {}
+			local function scan(dev)
+				for idx, g in pairs(gfx_sets(dev)) do
+					out[#out + 1] = {
+						device = dev.tag, index = idx,
+						width = g.width, height = g.height,
+						elements = g.elements, depth = g.depth,
+						colors = g.colors, granularity = g.granularity,
+						colorbase = g.colorbase, has_palette = g.has_palette,
+					}
+				end
+			end
+			if p.device then scan(util.device(p.device))
+			else
+				for _, dev in pairs(machine().devices) do scan(dev) end
+			end
+			table.sort(out, function(a, b)
+				if a.device ~= b.device then return a.device < b.device end
+				return a.index < b.index
+			end)
+			return { sets = out, count = #out }
+		end,
+
+		-- The headless equivalent of MAME's F4 tile viewer.
+		render_tiles = function(p)
+			local dev = util.device(p.device)
+			local sets = gfx_sets(dev)
+			local idx = p.index or 0
+			local g = sets[idx]
+			if not g then
+				local avail = {}
+				for k, _ in pairs(sets) do avail[#avail + 1] = tostring(k) end
+				table.sort(avail)
+				util.fail('no gfx set %s on "%s"; available: %s', tostring(idx), dev.tag,
+					#avail > 0 and table.concat(avail, ', ') or '(none)')
+			end
+			local file = p.filename or string.format('%s/mcp_gfx_%d.png', M.workdir, idx)
+			local first = util.clamp(p.first or 0, 0, math.max(0, g.elements - 1))
+			local count = util.clamp(p.count or math.min(256, g.elements - first), 1, 4096)
+            local cols  = util.clamp(p.columns or 16, 1, 256)
+			local color = util.clamp(p.color or 0, 0, math.max(0, (g.colors or 1) - 1))
+			local w, h, drawn, usedcols = g:sheet(file, first, count, cols, color)
+			return {
+				file = file, width = w, height = h,
+				tiles = drawn, columns = usedcols,
+				device = dev.tag, index = idx,
+				tile_width = g.width, tile_height = g.height,
+				first = first, color = color,
+			}
+		end,
+
+		list_tilemaps = function()
+			local tms = machine().tilemaps
+			local out = {}
+			for i = 0, (tms.count or 0) - 1 do
+				local t = tms[i]
+				if t then
+					out[#out + 1] = { index = i, width = t.width, height = t.height,
+						enabled = t.enabled }
+				end
+			end
+			return { tilemaps = out, count = #out }
+		end,
+
+		render_tilemap = function(p)
+			local tms = machine().tilemaps
+			local idx = p.index or 0
+			local t = tms[idx]
+			if not t then
+				util.fail('no tilemap %s (machine has %d)', tostring(idx), tms.count or 0)
+			end
+			local file = p.filename or string.format('%s/mcp_tilemap_%d.png', M.workdir, idx)
+			local w, h = t:render(file)
+			return { file = file, width = w, height = h, index = idx }
+		end,
+
+		palette = function(p)
+			local dev = util.device(p.device)
+			local pal
+			local ok = pcall(function() pal = dev.palette end)
+			if not ok or not pal then
+				-- fall back to the first palette device in the machine
+				for _, d in pairs(machine().palettes) do pal = d break end
+			end
+			if not pal then util.fail('no palette found') end
+			local limit = util.clamp(p.limit or 256, 1, 65536)
+			local entries = math.min(pal.entries, limit)
+			local colors = {}
+			for i = 0, entries - 1 do
+				local c = pal:pen_color(i)
+				colors[#colors + 1] = string.format('#%06X', c & 0xFFFFFF)
+			end
+			return { entries = pal.entries, returned = entries, colors = colors }
+		end,
+	})
+end
+
+
+--============================================== disassembly (phase 3)
+
+-- Backed by luaengine_dasm.cpp -> debug_disasm_buffer. The older
+-- cpu.disassemble route shells out to the "dasm" console command, which
+-- writes a file we parse back and which loses the STEP_OVER/STEP_OUT
+-- flags. Those flags are what make control-flow following possible.
+
+local function handlers_dasm(rpc)
+	local function disasm_for(dev)
+		local d = dev.disasm
+		if not d then
+			util.fail('device "%s" cannot disassemble (no disasm interface)', dev.tag)
+		end
+		return d
+	end
+
+	reg(rpc, 'dasm', {
+		at = function(p)
+			local dev = util.device(p.device)
+			local d = disasm_for(dev)
+			local addr = util.address(p.address, dev)
+			local e = d:at(addr)
+			return {
+				device = dev.tag,
+				address = string.format('0x%X', e.address),
+				bytes = e.bytes, text = e.text, size = e.size,
+				next_pc = string.format('0x%X', e.next_pc),
+				step_over = e.step_over, step_out = e.step_out,
+			}
+		end,
+
+		range = function(p)
+			local dev = util.device(p.device)
+			local d = disasm_for(dev)
+			local addr = util.address(
+				p.address or (dev.state['PC'] and dev.state['PC'].value) or 0, dev)
+			local count = util.clamp(p.count or 16, 1, 4096)
+			local list = d:range(addr, count)
+			local out = {}
+			for i = 1, #list do
+				local e = list[i]
+				out[#out + 1] = {
+					address = string.format('0x%X', e.address),
+					bytes = e.bytes, text = e.text, size = e.size,
+					step_over = e.step_over, step_out = e.step_out,
+				}
+			end
+			return { device = dev.tag, address = string.format('0x%X', addr),
+				count = #out, instructions = out }
+		end,
+
+		-- Linear sweep from an entry point, stopping at the first
+		-- unconditional end-of-flow (STEP_OUT), and collecting the call
+		-- targets seen on the way. Deliberately simple and clearly
+		-- labelled: it does not follow branches.
+		["function"] = function(p)
+			local dev = util.device(p.device)
+			local d = disasm_for(dev)
+			local addr = util.address(p.address, dev)
+			local limit = util.clamp(p.limit or 256, 1, 4096)
+			local out, calls = {}, {}
+			local pc = addr
+			local terminated = false
+			for _ = 1, limit do
+				local e = d:at(pc)
+				out[#out + 1] = {
+					address = string.format('0x%X', e.address),
+					bytes = e.bytes, text = e.text,
+					step_over = e.step_over, step_out = e.step_out,
+				}
+				if e.step_over then
+					-- a call: record any absolute target in the text
+					local t = e.text:match('%$(%x+)') or e.text:match('0x(%x+)')
+					if t then calls[#calls + 1] = '0x' .. t:upper() end
+				end
+				if e.step_out then terminated = true break end
+				if e.next_pc == pc then break end
+				pc = e.next_pc
+			end
+			return {
+				device = dev.tag,
+				entry = string.format('0x%X', addr),
+				instructions = out, count = #out,
+				calls = calls,
+				terminated = terminated,
+				note = terminated and 'stopped at end-of-flow instruction'
+					or 'hit instruction limit without reaching a return; may be incomplete',
+			}
+		end,
+	})
+end
+
 --=================================================== escape hatch / logging
 
 local function handlers_debug(rpc)
@@ -790,6 +997,8 @@ function M.install(rpc, opts)
 	handlers_memory(rpc)
 	handlers_cpu(rpc)
 	handlers_media(rpc)
+	handlers_gfx(rpc)
+	handlers_dasm(rpc)
 	handlers_input_state(rpc)
 	handlers_debug(rpc)
 

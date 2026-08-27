@@ -138,20 +138,79 @@ try {
   console.log('\n== 14. breakpoint trap + wait_for_stop (the core agent loop) ==');
   await call('bp.clear');
   const pcNow = data(await call('cpu.registers')).registers.find((r) => r.name === 'PC');
-  // Watchpoint the whole zero page: a running game will touch it almost immediately.
+  // Watchpoint a broad RAM range. Which addresses a driver actually
+  // touches is driver-specific, so fall back to a PC breakpoint (which
+  // is guaranteed to hit) before declaring failure.
   await call('wp.set', { address: '0x0000', length: 0x100, type: 'rw' });
   await call('exec.resume');
-  const stop = data(await call('exec.wait_for_stop', { timeout_ms: 8000 }));
+  let stop = data(await call('exec.wait_for_stop', { timeout_ms: 5000 }));
+  if (stop.timed_out) {
+    await call('wp.clear');
+    await call('exec.pause');
+    const pcNow2 = data(await call('cpu.registers')).registers.find((r) => r.name === 'PC');
+    await call('bp.set', { address: pcNow2.hex });
+    await call('exec.resume');
+    stop = data(await call('exec.wait_for_stop', { timeout_ms: 8000 }));
+  }
   ok(stop.timed_out !== true, `trapped: reason=${stop.reason} pc=${stop.pc}`);
   ok(['watchpoint', 'breakpoint', 'step', 'unknown'].includes(stop.reason),
      `stop reason recognised (${stop.reason})`);
   await call('wp.clear');
+  await call('bp.clear');
 
   console.log('\n== 15. escape hatch ==');
   const raw = data(await call('debug.command', { command: 'help' }));
   ok(Array.isArray(raw.output), `debug.command returned ${raw.output?.length} console lines`);
 
-  console.log('\n== 16. session.stop ==');
+
+  console.log('\n== 17. gfx: decoded graphics (phase 3) ==');
+  const sets = data(await call('gfx.list_sets'));
+  ok(Array.isArray(sets.sets), `gfx.list_sets returned ${sets.count} set(s)`);
+  if (sets.count > 0) {
+    const s0 = sets.sets[0];
+    console.log(`     set0: ${s0.device}[${s0.index}] ${s0.width}x${s0.height} ` +
+                `x${s0.elements} ${s0.depth}bpp`);
+    const shotRes = await call('gfx.render_tiles', {
+      device: s0.device, index: s0.index, count: 64, columns: 8,
+    });
+    ok(!shotRes.isError, 'gfx.render_tiles succeeded');
+    const gimg = shotRes.content?.find((c) => c.type === 'image');
+    ok(gimg !== undefined, 'tile sheet returned as inline MCP image');
+    if (gimg) {
+      const buf = Buffer.from(gimg.data, 'base64');
+      ok(buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+         `valid PNG (${buf.length} bytes)`);
+      const meta = data(shotRes);
+      ok(meta.width === 8 * s0.width, `sheet width matches 8 columns (${meta.width})`);
+    }
+  } else {
+    console.log('     (driver has no decoded gfx sets; skipping render)');
+  }
+
+  const tms = data(await call('gfx.list_tilemaps'));
+  ok(typeof tms.count === 'number', `gfx.list_tilemaps -> ${tms.count} tilemap(s)`);
+  if (tms.count > 0) {
+    const tmRes = await call('gfx.render_tilemap', { index: 0 });
+    ok(!tmRes.isError, 'gfx.render_tilemap succeeded');
+    ok(tmRes.content?.some((c) => c.type === 'image'), 'tilemap returned as inline image');
+  }
+
+  console.log('\n== 18. dasm: structured disassembly (phase 3) ==');
+  const dr = data(await call('dasm.range', { address: '0x1000', count: 8 }));
+  ok(dr.instructions?.length > 0, `dasm.range -> ${dr.instructions?.length} instructions`);
+  const i0 = dr.instructions?.[0];
+  ok(i0 && typeof i0.text === 'string', `first: ${i0?.address} ${i0?.bytes} ${i0?.text}`);
+  ok(i0 && typeof i0.step_over === 'boolean' && typeof i0.step_out === 'boolean',
+     'step_over/step_out flags present (the reason this binding exists)');
+
+  const one = data(await call('dasm.at', { address: '0x1000' }));
+  ok(one.size > 0, `dasm.at size=${one.size} next=${one.next_pc}`);
+
+  const fn = data(await call('dasm.function', { address: '0x1000', limit: 32 }));
+  ok(Array.isArray(fn.instructions), `dasm.function swept ${fn.count} instructions`);
+  ok(typeof fn.terminated === 'boolean', `terminated=${fn.terminated} (${fn.note})`);
+
+  console.log('\n== 19. session.stop ==');
   ok(data(await call('session.stop')).stopped === true, 'session stopped');
 
 } catch (e) {

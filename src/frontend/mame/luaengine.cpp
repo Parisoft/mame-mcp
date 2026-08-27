@@ -2436,6 +2436,8 @@ void lua_engine::initialize()
 	initialize_input(emu);
 	initialize_memory(emu);
 	initialize_render(emu);
+	initialize_gfx(emu);
+	initialize_dasm(emu);
 }
 
 //-------------------------------------------------

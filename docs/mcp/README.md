@@ -151,21 +151,41 @@ MAME_SMOKE_DRIVER=gridlee node test/smoke.mjs
 
 ---
 
-## Known limitations (Phase 1)
+## Phase 3: graphics and disassembly bindings
 
-These are the things Phase 3 of the plan addresses by moving into C++:
+Two C++ modules add capabilities that had no Lua route at all:
+
+* **`src/frontend/mame/luaengine_gfx.cpp`** — binds `gfx_element`,
+  `device_gfx_interface` and `tilemap_t`. MAME already decodes each driver's graphics,
+  but the only consumer was the interactive F4 tile viewer, and there is no `gfx`
+  debugger command — so on a headless build the decoded pixels were unreachable.
+  Powers `gfx.list_sets`, `gfx.render_tiles`, `gfx.list_tilemaps`, `gfx.render_tilemap`
+  and `gfx.palette`. Tile sheets come back as inline PNGs, so a multimodal agent can
+  *see* what a ROM contains.
+* **`src/frontend/mame/luaengine_dasm.cpp`** — binds `debug_disasm_buffer`, giving
+  structured `{address, bytes, text, size, step_over, step_out}` records. Those two
+  flags come from the disassembler itself, which is what makes control-flow following
+  possible without parsing mnemonics. Powers `dasm.at`, `dasm.range` and
+  `dasm.function`.
+
+Hooking these in touched only six lines of existing code (two each in
+`luaengine.h`, `luaengine.cpp` and `scripts/src/mame/frontend.lua`); the accessors
+(`device.gfx`, `device.disasm`, `machine.tilemaps`) are registered from inside the new
+modules themselves.
+
+`cpu.disassemble` is retained for compatibility but `dasm.range` is preferred.
+
+## Known limitations
 
 * **Stop events are detected by scraping the debugger console log** for
   `"Stopped at breakpoint N"`, exactly as `plugins/gdbstub` does. `triggered_breakpoint()` /
-  `triggered_watchpoint()` are not exposed to Lua. This is the most brittle part of Phase 1.
-* **Disassembly goes through the `dasm` command**, which writes a file we then parse back.
-  There is no Lua binding for `debug_disasm_buffer`.
-* **No decoded-graphics tools.** `gfx_element`, `device_gfx_interface` and `tilemap_t` have
-  no Lua bindings, so `gfx.render_tiles` / `gfx.render_tilemap` are not available yet.
-  These are among the highest-value tools for ROM work — see [`PLAN.md` §10](PLAN.md).
+  `triggered_watchpoint()` are not exposed to Lua. This is the most brittle part of the stack.
 * **Coverage tracking** (`trackpc`, `trackmem`) is reachable only via `debug.command`.
 * **Bulk memory reads are byte-at-a-time through Lua**, so very large reads are slow.
 * **One session per server process.**
+* **`dasm.function` is a linear sweep**, not a control-flow walk: it stops at the first
+  end-of-flow instruction and does not follow branches, so treat its extent as a first
+  approximation.
 
 ### Upstream bug worth knowing
 

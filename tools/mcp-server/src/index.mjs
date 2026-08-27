@@ -43,6 +43,23 @@ const guard = (fn) => async (args = {}) => {
   try { return await fn(args); } catch (e) { return errResult(e); }
 };
 
+// Attach a generated PNG to a tool result as inline MCP image content,
+// falling back to a path reference when it is too large.
+function withImage(res, file) {
+  const content = [{ type: 'text', text: JSON.stringify(res, null, 2) }];
+  try {
+    const buf = fs.readFileSync(file);
+    if (buf.length <= MAX_INLINE_IMAGE) {
+      content.push({ type: 'image', data: buf.toString('base64'), mimeType: 'image/png' });
+    } else {
+      content.push({ type: 'text', text: `Image is ${buf.length} bytes; too large to inline. Read it from ${file}.` });
+    }
+  } catch (e) {
+    content.push({ type: 'text', text: `Could not read ${file}: ${e.message}` });
+  }
+  return { content, structuredContent: res };
+}
+
 function requireSession() {
   if (!session.proc || !session.ready) {
     throw new Error('no MAME session running. Call session.start first (e.g. {"driver":"gridlee"}).');
@@ -574,6 +591,104 @@ server.registerTool('state.load', {
   title: 'Load a save state', description: 'Restore machine state from a slot.',
   inputSchema: { slot: z.string().optional() }, annotations: RW,
 }, passthrough('state.load'));
+
+
+// ================================================================ graphics
+
+server.registerTool('gfx.list_sets', {
+  title: 'List decoded graphics sets',
+  description:
+    'Every decoded tile/sprite set the driver defines, with tile size, element count, bit depth ' +
+    'and palette layout. Start here before rendering.',
+  inputSchema: { ...deviceArg }, annotations: RO,
+}, passthrough('gfx.list_sets'));
+
+server.registerTool('gfx.render_tiles', {
+  title: 'Render decoded tiles to a PNG',
+  description:
+    'Render a range of decoded tiles as a PNG contact sheet and return it inline. This is the ' +
+    'headless equivalent of MAME\'s F4 tile viewer, and the fastest way to identify what graphics ' +
+    'a ROM contains: fonts, sprite sheets, backgrounds. Use gfx.list_sets first to pick a set.',
+  inputSchema: {
+    ...deviceArg,
+    index: z.number().optional().describe('Gfx set index (default 0).'),
+    first: z.number().optional().describe('First tile (default 0).'),
+    count: z.number().optional().describe('Tiles to render (default 256).'),
+    columns: z.number().optional().describe('Tiles per row (default 16).'),
+    color: z.number().optional().describe('Palette group to colour with (default 0).'),
+    filename: z.string().optional(),
+  },
+  annotations: RO,
+}, guard(async (args) => {
+  requireSession();
+  const res = await session.call('gfx.render_tiles', args, 30000);
+  return withImage(res, res.file);
+}));
+
+server.registerTool('gfx.list_tilemaps', {
+  title: 'List tilemaps',
+  description: 'Tilemaps the driver has created, with their pixel dimensions.',
+  inputSchema: {}, annotations: RO,
+}, passthrough('gfx.list_tilemaps'));
+
+server.registerTool('gfx.render_tilemap', {
+  title: 'Render a tilemap to a PNG',
+  description:
+    'Compose a whole tilemap through its palette and return it as a PNG. Shows the full ' +
+    'background/foreground plane including off-screen regions, which is often where scoreboards ' +
+    'and status text live.',
+  inputSchema: {
+    index: z.number().optional().describe('Tilemap index (default 0).'),
+    filename: z.string().optional(),
+  },
+  annotations: RO,
+}, guard(async (args) => {
+  requireSession();
+  const res = await session.call('gfx.render_tilemap', args, 30000);
+  return withImage(res, res.file);
+}));
+
+server.registerTool('gfx.palette', {
+  title: 'Read the palette',
+  description: 'Current palette entries as hex colours.',
+  inputSchema: { ...deviceArg, limit: z.number().optional() }, annotations: RO,
+}, passthrough('gfx.palette'));
+
+// ============================================================ disassembly
+
+server.registerTool('dasm.range', {
+  title: 'Disassemble a range',
+  description:
+    'Disassemble N instructions with structured output: {address, bytes, text, size, step_over, ' +
+    'step_out}. The step_over/step_out flags come from the disassembler itself, so you can follow ' +
+    'calls and returns without parsing mnemonics. Prefer this over cpu.disassemble.',
+  inputSchema: {
+    ...deviceArg,
+    address: z.union([z.string(), z.number()]).optional().describe('Defaults to the current PC.'),
+    count: z.number().optional().describe('Instruction count (default 16).'),
+  },
+  annotations: RO,
+}, passthrough('dasm.range', 30000));
+
+server.registerTool('dasm.at', {
+  title: 'Disassemble one instruction',
+  description: 'Disassemble a single instruction, including its size and next PC.',
+  inputSchema: { ...deviceArg, ...addrArg('Address to disassemble.') },
+  annotations: RO,
+}, passthrough('dasm.at'));
+
+server.registerTool('dasm.function', {
+  title: 'Disassemble a function',
+  description:
+    'Sweep from an entry point until an end-of-flow instruction (step_out), collecting call ' +
+    'targets seen along the way. Note: this is a linear sweep, it does not follow branches, so ' +
+    'treat the result as a first approximation of the function body.',
+  inputSchema: {
+    ...deviceArg, ...addrArg('Function entry point.'),
+    limit: z.number().optional().describe('Max instructions to sweep (default 256).'),
+  },
+  annotations: RO,
+}, passthrough('dasm.function', 30000));
 
 // ============================================================ escape hatch
 
