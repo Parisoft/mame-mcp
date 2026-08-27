@@ -145,8 +145,11 @@ lua54 plugins/mcp/test/test_util.lua
 #    No MAME binary required.
 cd tools/mcp-server && node test/protocol.mjs
 
-# 3. End-to-end against a real emulator. Needs a build (and ideally ROMs).
-MAME_SMOKE_DRIVER=gridlee node test/smoke.mjs
+# 3. End-to-end agent workflow. Needs a build and ROMs.
+MAME_SMOKE_DRIVER=wrally node test/smoke.mjs
+
+# 4. Coverage audit: invoke every registered tool, fail if any is missed.
+MAME_SWEEP_DRIVER=wrally node test/full-sweep.mjs
 ```
 
 ---
@@ -204,6 +207,57 @@ instruction-stepped sweep starting at `0x0000`.
 Note that `limit` caps how many **addresses** are examined, not how many are found. Set it
 to cover the whole requested range or the sweep truncates early and under-reports; the
 result reports `truncated` so you can tell.
+
+## Verified end-to-end against a real ROM
+
+Run on 2026-08-27 with **World Rally** (Gaelco 1993 — 68000 + DS5002FP, 16384 sprites,
+2 tilemaps, OKIM6295) on the `OSD=headless` build, no X and no framebuffer:
+
+```
+tools registered : 67
+tools invoked    : 67
+  succeeded      : 71
+  FAILED         : 0
+ALL TOOLS EXERCISED SUCCESSFULLY
+```
+
+`tools/mcp-server/test/full-sweep.mjs` is a coverage audit rather than a workflow test:
+it invokes **every registered tool** and fails if any is left uninvoked, so a tool cannot
+silently rot.
+
+Highlights from that run:
+
+* boots at ~800 % of real time; screenshot is a genuine 368×232 frame with 84 distinct
+  colours (verified by decoding the PNG's IDAT, not just its header)
+* `gfx.render_tiles` → 256×128 sheet from a 16×16 ×16384 16bpp sprite set
+* `gfx.render_tilemap` → 1024×512 composed tilemap
+* `dasm.range` → real 68000, e.g. `move.b $fec1fc.l, D0` / `beq $2770`
+* `dasm.function` → swept 19 instructions, `terminated=true`, 2 call targets
+
+### The coverage workflow, for real
+
+The reason `cov.*` exists — diffing execution between two game phases:
+
+| phase | addresses | ranges |
+|---|---|---|
+| A: boot / attract | 536 | 536 |
+| B: after coin + start | 1008 | 1008 |
+| **new in B only** | **472** | — |
+
+472 addresses of code that only runs once a credit is inserted, isolated in one step and
+immediately disassemblable. That is the "partition an unknown ROM" workflow working on
+real hardware.
+
+### ROM notes
+
+MAME is strict about ROM sets, and two wrinkles are worth knowing:
+
+* This MAME revision renamed wrally's two 68000 program ROMs
+  (`worldr16.c22`/`worldr17.c23` → `invers_taula_c22/c23_...`). The data is identical;
+  only the expected filenames changed.
+* The `plds` region (3 PALs/GALs) is **documentation-only** — the driver never reads it,
+  and one entry is `NO_DUMP`, so a "complete" set cannot exist. MAME still refuses to boot
+  without the files present, so placeholders are required. They cannot affect emulation.
 
 ## Known limitations
 
