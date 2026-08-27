@@ -690,6 +690,90 @@ server.registerTool('dasm.function', {
   annotations: RO,
 }, passthrough('dasm.function', 30000));
 
+
+// ================================================================ coverage
+
+server.registerTool('cov.track_pc_start', {
+  title: 'Start PC coverage tracking',
+  description:
+    'Record every address the CPU executes. The highest-leverage tool for reverse engineering: ' +
+    'run one game phase (attract mode), snapshot the coverage, run another (in game), then diff ' +
+    'the two to partition an unknown ROM into functional regions. Slows emulation somewhat.',
+  inputSchema: {
+    ...deviceArg,
+    clear: z.boolean().optional().describe('Discard existing coverage first.'),
+  },
+  annotations: SAFE_W,
+}, passthrough('cov.track_pc_start'));
+
+server.registerTool('cov.track_pc_stop', {
+  title: 'Stop PC coverage tracking',
+  description: 'Stop recording executed addresses. Coverage collected so far is retained.',
+  inputSchema: { ...deviceArg }, annotations: SAFE_W,
+}, passthrough('cov.track_pc_stop'));
+
+server.registerTool('cov.visited_map', {
+  title: 'Read executed-address coverage',
+  description:
+    'Sweep an address range and return the executed regions as ranges. Call cov.track_pc_start ' +
+    'first and let the game run. Defaults to an exhaustive byte-wise probe, so a wide range ' +
+    'over a large ROM can take a moment; pass mode="instruction" to trade accuracy for speed.',
+  inputSchema: {
+    ...deviceArg, ...spaceArg,
+    start: z.union([z.string(), z.number()]).optional().describe('Default 0.'),
+    end: z.union([z.string(), z.number()]).optional().describe('Default the full address mask.'),
+    limit: z.number().optional().describe('Max addresses to examine (default 200000).'),
+    mode: z.enum(['byte', 'instruction']).optional().describe(
+      'byte (default) probes every address and cannot miss. instruction steps via the ' +
+      'disassembler: faster over large ranges, but can walk past executed addresses when its ' +
+      'alignment differs from what the CPU ran.'),
+  },
+  annotations: RO,
+}, passthrough('cov.visited_map', 120000));
+
+server.registerTool('cov.visited', {
+  title: 'Was this address executed?',
+  description: 'Check a single address against the recorded coverage.',
+  inputSchema: { ...deviceArg, ...addrArg('Address to check.') },
+  annotations: RO,
+}, passthrough('cov.visited'));
+
+server.registerTool('cov.track_mem_start', {
+  title: 'Start memory-write attribution',
+  description:
+    'Record which PC last wrote each memory address, so cov.pc_at can answer "what code wrote ' +
+    'here?" without setting a watchpoint and waiting for a hit.',
+  inputSchema: { ...deviceArg, clear: z.boolean().optional() },
+  annotations: SAFE_W,
+}, passthrough('cov.track_mem_start'));
+
+server.registerTool('cov.track_mem_stop', {
+  title: 'Stop memory-write attribution',
+  description: 'Stop recording write attribution.',
+  inputSchema: { ...deviceArg }, annotations: SAFE_W,
+}, passthrough('cov.track_mem_stop'));
+
+server.registerTool('cov.pc_at', {
+  title: 'Which PC wrote this address?',
+  description:
+    'The PC that last wrote a memory address. Requires cov.track_mem_start beforehand. Turns a ' +
+    'data discovery straight into a code discovery.',
+  inputSchema: {
+    ...deviceArg, ...spaceArg, ...addrArg('Memory address to attribute.'),
+    data: z.number().optional().describe('Value written, if known.'),
+  },
+  annotations: RO,
+}, passthrough('cov.pc_at'));
+
+server.registerTool('cov.history', {
+  title: 'Recent PC history',
+  description:
+    'The most recently executed addresses, newest first. Answers "how did we get here?" at a ' +
+    'breakpoint without setting up a trace.',
+  inputSchema: { ...deviceArg, count: z.number().optional().describe('Default 16, max 256.') },
+  annotations: RO,
+}, passthrough('cov.history'));
+
 // ============================================================ escape hatch
 
 server.registerTool('debug.command', {

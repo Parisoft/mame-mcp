@@ -151,7 +151,7 @@ MAME_SMOKE_DRIVER=gridlee node test/smoke.mjs
 
 ---
 
-## Phase 3: graphics and disassembly bindings
+## Phase 3: graphics, disassembly and coverage bindings
 
 Two C++ modules add capabilities that had no Lua route at all:
 
@@ -173,14 +173,43 @@ Hooking these in touched only six lines of existing code (two each in
 (`device.gfx`, `device.disasm`, `machine.tilemaps`) are registered from inside the new
 modules themselves.
 
+* **`src/frontend/mame/luaengine_cov.cpp`** — binds PC-coverage tracking, memory-write
+  attribution and the PC history ring. MAME's `trackpc` console command is a *write-only
+  switch*: nothing in `debugcmd.cpp` ever reads the visited set back (only `dvdisasm.cpp`
+  queries it one address at a time to shade the disassembly view), so `debug.command`
+  could start tracking but never report the result. Powers `cov.track_pc_start/stop`,
+  `cov.visited_map`, `cov.visited`, `cov.track_mem_start/stop`, `cov.pc_at` and
+  `cov.history`.
+
 `cpu.disassemble` is retained for compatibility but `dasm.range` is preferred.
+
+### An upstream bug this surfaced
+
+`device_debug::compute_debug_flags()` did not consider `m_track_pc` / `m_track_mem` when
+deciding whether to request `DEBUG_FLAG_CALL_HOOK`. Since coverage is recorded inside
+`instruction_hook()`, enabling tracking **silently recorded nothing** unless some other
+feature (a breakpoint, a trace, single-stepping) happened to have requested the hook
+already. Fixed in `src/emu/debug/debugcpu.cpp`, and `set_track_pc()`/`set_track_mem()`
+now recompute the flags so the change takes effect immediately.
+
+### Coverage sweep accuracy
+
+`cov.visited_map` defaults to an exhaustive **byte-wise** probe. `track_pc_visited()` keys
+on *(address, opcode crc32)*, so probing non-instruction addresses simply returns false and
+nothing can be missed. A faster `mode:"instruction"` steps via the disassembler, but its
+alignment need not match what the CPU actually executed — measured in practice: a machine
+whose PC history showed execution at `0xA39C` had that address skipped entirely by an
+instruction-stepped sweep starting at `0x0000`.
+
+Note that `limit` caps how many **addresses** are examined, not how many are found. Set it
+to cover the whole requested range or the sweep truncates early and under-reports; the
+result reports `truncated` so you can tell.
 
 ## Known limitations
 
 * **Stop events are detected by scraping the debugger console log** for
   `"Stopped at breakpoint N"`, exactly as `plugins/gdbstub` does. `triggered_breakpoint()` /
   `triggered_watchpoint()` are not exposed to Lua. This is the most brittle part of the stack.
-* **Coverage tracking** (`trackpc`, `trackmem`) is reachable only via `debug.command`.
 * **Bulk memory reads are byte-at-a-time through Lua**, so very large reads are slow.
 * **One session per server process.**
 * **`dasm.function` is a linear sweep**, not a control-flow walk: it stops at the first

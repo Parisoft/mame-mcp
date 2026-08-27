@@ -210,7 +210,55 @@ try {
   ok(Array.isArray(fn.instructions), `dasm.function swept ${fn.count} instructions`);
   ok(typeof fn.terminated === 'boolean', `terminated=${fn.terminated} (${fn.note})`);
 
-  console.log('\n== 19. session.stop ==');
+
+  console.log('\n== 19. cov: execution coverage (phase 3b) ==');
+  // trackpc is a write-only switch from the console; the readback below
+  // only exists because of the luaengine_cov.cpp bindings.
+  await call('exec.pause');
+  ok(data(await call('cov.track_pc_start', { clear: true })).ok, 'cov.track_pc_start');
+
+  // Let the game actually execute so there is something to measure.
+  await call('exec.resume');
+  await new Promise((r) => setTimeout(r, 1500));
+  await call('exec.pause');
+  ok(data(await call('cov.track_pc_stop')).ok, 'cov.track_pc_stop');
+
+  // NB: limit caps how many ADDRESSES are examined, so it must cover the
+  // whole requested range -- a short limit silently truncates the sweep
+  // before reaching high addresses.
+  const cov = data(await call('cov.visited_map', { start: '0x0000', end: '0xFFFF', limit: 200000 }));
+  ok(typeof cov.visited_instructions === 'number',
+     `visited ${cov.visited_instructions} of ${cov.examined_instructions} examined`);
+  ok(cov.truncated === false, `sweep covered the whole range (examined ${cov.examined_instructions})`);
+  ok(cov.visited_instructions > 0,
+     `coverage actually recorded (${cov.range_count} range(s))`);
+  if (cov.ranges?.length) {
+    const r0 = cov.ranges[0];
+    console.log(`     first range: ${r0.first}-${r0.last} (${r0.size} bytes)`);
+  }
+
+  // A single address inside a covered range must report as visited.
+  if (cov.ranges?.length) {
+    const probe = data(await call('cov.visited', { address: cov.ranges[0].first }));
+    ok(probe.visited === true, `cov.visited agrees for ${probe.address}`);
+  }
+
+  console.log('\n== 20. cov: write attribution and history ==');
+  ok(data(await call('cov.track_mem_start', { clear: true })).ok, 'cov.track_mem_start');
+  await call('exec.resume');
+  await new Promise((r) => setTimeout(r, 800));
+  await call('exec.pause');
+  await call('cov.track_mem_stop');
+  // pc_at legitimately returns found=false if nothing wrote that exact
+  // address, so assert the shape rather than a specific hit.
+  const at = data(await call('cov.pc_at', { address: '0x0000' }));
+  ok(typeof at.found === 'boolean', `cov.pc_at found=${at.found}${at.pc ? ' pc=' + at.pc : ''}`);
+
+  const hist = data(await call('cov.history', { count: 8 }));
+  ok(Array.isArray(hist.history), `cov.history returned ${hist.count} entries`);
+  ok(hist.count > 0, `history non-empty (newest ${hist.history?.[0]})`);
+
+  console.log('\n== 21. session.stop ==');
   ok(data(await call('session.stop')).stopped === true, 'session stopped');
 
 } catch (e) {

@@ -2438,6 +2438,7 @@ void lua_engine::initialize()
 	initialize_render(emu);
 	initialize_gfx(emu);
 	initialize_dasm(emu);
+	initialize_cov(emu);
 }
 
 //-------------------------------------------------

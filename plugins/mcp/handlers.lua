@@ -947,6 +947,138 @@ local function handlers_dasm(rpc)
 	})
 end
 
+
+--============================================== coverage (phase 3b)
+
+-- Backed by luaengine_cov.cpp. MAME's "trackpc" console command is a
+-- write-only switch: nothing in debugcmd.cpp reads the visited set back
+-- (only dvdisasm.cpp queries it, one address at a time, to shade the
+-- disassembly view). So coverage was unreachable from Lua until those
+-- bindings existed -- debug.command can start tracking but can never
+-- tell you the result.
+
+local function handlers_cov(rpc)
+	reg(rpc, 'cov', {
+		-- Record every address the CPU executes.
+		track_pc_start = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			if p.clear then dev.debug:track_pc_clear() end
+			dev.debug:set_track_pc(true)
+			return { ok = true, device = dev.tag, cleared = p.clear or false }
+		end,
+
+		track_pc_stop = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			dev.debug:set_track_pc(false)
+			return { ok = true, device = dev.tag }
+		end,
+
+		track_pc_clear = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			dev.debug:track_pc_clear()
+			return { ok = true, device = dev.tag }
+		end,
+
+		visited = function(p)
+			local dev = util.device(p.device)
+			local addr = util.address(p.address, dev)
+			return {
+				device = dev.tag,
+				address = string.format('0x%X', addr),
+				visited = dev.debug:visited(addr),
+			}
+		end,
+
+		-- The payload tool: sweep a range and return executed regions.
+		-- Diffing two of these (e.g. attract mode vs in-game) is the
+		-- fastest way to partition an unknown ROM.
+		visited_map = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			local sp = util.space(dev, p.space)
+			local first = util.address(p.start or 0, dev)
+			local last = util.address(p['end'] or sp.address_mask, dev)
+			if last < first then util.fail('end (0x%X) is before start (0x%X)', last, first) end
+			local limit = util.clamp(p.limit or 200000, 1, 5000000)
+			if p.mode and p.mode ~= 'byte' and p.mode ~= 'instruction' then
+				util.fail('mode must be "byte" or "instruction"')
+			end
+
+			local res = dev.debug:visited_ranges(first, last, limit, p.mode)
+			local ranges = {}
+			for i = 1, res.range_count do
+				local r = res.ranges[i]
+				ranges[#ranges + 1] = {
+					first = string.format('0x%X', r.first),
+					last = string.format('0x%X', r.last),
+					size = r.last - r.first + 1,
+				}
+			end
+			return {
+				device = dev.tag,
+				start = string.format('0x%X', first),
+				['end'] = string.format('0x%X', last),
+				ranges = ranges,
+				range_count = res.range_count,
+				visited_instructions = res.visited,
+				examined_instructions = res.examined,
+				truncated = res.truncated,
+				mode = res.mode,
+				note = res.visited == 0
+					and 'no coverage recorded; call cov.track_pc_start and let the game run'
+					or nil,
+			}
+		end,
+
+		-- Which PC last wrote a given address. Needs track_mem.
+		track_mem_start = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			if p.clear then dev.debug:track_mem_clear() end
+			dev.debug:set_track_mem(true)
+			return { ok = true, device = dev.tag }
+		end,
+
+		track_mem_stop = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			dev.debug:set_track_mem(false)
+			return { ok = true, device = dev.tag }
+		end,
+
+		pc_at = function(p)
+			local dev = util.device(p.device)
+			local sp, spname = util.space(dev, p.space)
+			local addr = util.address(p.address, dev)
+			local pc = dev.debug:pc_at(sp.index, addr, p.data or 0)
+			return {
+				device = dev.tag, space = spname,
+				address = string.format('0x%X', addr),
+				pc = pc and string.format('0x%X', pc) or nil,
+				found = pc ~= nil,
+				note = pc == nil
+					and 'no writer recorded; call cov.track_mem_start first, then let the game run'
+					or nil,
+			}
+		end,
+
+		-- How execution reached the current point.
+		history = function(p)
+			local dev = util.device(p.device)
+			require_debugger()
+			local n = util.clamp(p.count or 16, 1, 256)
+			local h = dev.debug:history(n)
+			local out = {}
+            for i = 1, #h do out[#out + 1] = string.format('0x%X', h[i]) end
+			return { device = dev.tag, count = #out, history = out,
+				note = 'most recent first' }
+		end,
+	})
+end
+
 --=================================================== escape hatch / logging
 
 local function handlers_debug(rpc)
@@ -999,6 +1131,7 @@ function M.install(rpc, opts)
 	handlers_media(rpc)
 	handlers_gfx(rpc)
 	handlers_dasm(rpc)
+	handlers_cov(rpc)
 	handlers_input_state(rpc)
 	handlers_debug(rpc)
 

@@ -206,6 +206,7 @@ private:
 
 	void close();
 
+	void initialize_cov(sol::table &emu);
 	void initialize_dasm(sol::table &emu);
 	void initialize_debug(sol::table &emu);
 	void initialize_gfx(sol::table &emu);
