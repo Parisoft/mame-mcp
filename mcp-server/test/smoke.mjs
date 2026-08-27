@@ -6,7 +6,7 @@
 //
 //   MAME_SMOKE_DRIVER=gridlee node test/smoke.mjs
 //
-// Requires a built MAME (see tools/dev/bootstrap-headless-build.sh) and ROMs
+// Requires a built MAME (see mcp-server/bootstrap-headless-build.sh) and ROMs
 // for the chosen driver under <repo>/roms. If the driver's ROMs are missing
 // MAME still boots with a checksum warning, which is enough for this test.
 
@@ -17,7 +17,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, '..', '..', '..');
+const repoRoot = path.resolve(here, '..', '..');
 const serverPath = path.join(here, '..', 'src', 'index.mjs');
 const DRIVER = process.env.MAME_SMOKE_DRIVER || 'gridlee';
 

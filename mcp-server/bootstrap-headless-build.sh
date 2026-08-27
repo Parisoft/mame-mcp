@@ -137,6 +137,6 @@ if [ "${DO_BUILD:-0}" = "1" ]; then
   log "Building (JOBS=$JOBS) ..."
   # shellcheck disable=SC1090
   source "$DEPS/env.sh"
-  cd "$(dirname "$0")/../.."
+  cd "$(dirname "$0")/.."
   exec make "${MAKE_ARGS[@]}" -j"$JOBS"
 fi

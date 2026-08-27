@@ -7,7 +7,7 @@
 --
 --   lua54 plugins/mcp/test/test_util.lua
 --
--- MAME-dependent behaviour is covered by tools/mcp-server/test/smoke.mjs.
+-- MAME-dependent behaviour is covered by mcp-server/test/smoke.mjs.
 
 package.path = table.concat({
 	'plugins/?.lua', 'plugins/?/init.lua',

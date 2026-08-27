@@ -18,7 +18,7 @@ import { MameSession } from './session.mjs';
 
 // Default MAME_DIR to the repository root (three levels up from src/), not
 // the server's cwd -- otherwise -pluginspath and the binary path miss.
-const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
+const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');
 const session = new MameSession({
   mameDir: process.env.MAME_DIR || repoRoot,
 });

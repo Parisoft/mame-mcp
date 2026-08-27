@@ -29,7 +29,7 @@
 !/samples/
 !/scripts/
 !/src/
-!/tools/
+!/mcp-server/
 !/shaders/
 !/tests/
 !/doxygen/
@@ -52,8 +52,8 @@ regtests/jedutil/output
 /samples
 
 # mame-mcp: agent-generated artifacts and JS deps
-/tools/mcp-server/node_modules/
-/tools/mcp-server/package-lock.json
+/mcp-server/node_modules/
+/mcp-server/package-lock.json
 /artifacts/
 *.wav
 *.avi

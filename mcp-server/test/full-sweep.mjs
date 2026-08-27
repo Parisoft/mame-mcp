@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(here, '..', '..', '..');
+const repoRoot = path.resolve(here, '..', '..');
 const DRIVER = process.env.MAME_SWEEP_DRIVER || 'wrally';
 
 const transport = new StdioClientTransport({

@@ -1,6 +1,11 @@
 # MAME‑MCP: turning this MAME fork into a headless MCP server
 
 **Status:** design proposal — *no source changes made*. Phase 0 spike **executed and passing** (§11).
+
+> **Historical note:** this document records the plan as written before implementation, and
+> is deliberately left unedited. Paths here say `tools/mcp-server`; the server now lives at
+> `mcp-server/` in the repository root. See the root [README](../../README.md) for the
+> as-built layout.
 **Audience:** maintainers of `Parisoft/mame-mcp`.
 **Goal:** let an Arena agent drive MAME to debug and reverse‑engineer arcade ROMs (breakpoints, memory, VRAM, screenshots, audio capture, tracing) over the Model Context Protocol, with **no X server, no Qt, no BGFX/OpenGL, no interactive UI**.
 

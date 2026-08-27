@@ -4,7 +4,7 @@
 -- MCP bridge plugin.
 --
 -- Exposes MAME's debugging surface as line-delimited JSON-RPC 2.0 on a
--- socket. An external MCP server (tools/mcp-server) is the only client; it
+-- socket. An external MCP server (mcp-server) is the only client; it
 -- translates between MCP-over-stdio and this protocol.
 --
 -- Why a plugin and not a C++ debug_module (phase 1 of docs/mcp/PLAN.md):

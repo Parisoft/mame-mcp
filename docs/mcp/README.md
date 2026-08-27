@@ -12,7 +12,7 @@ WAV capture, with **no X server and no framebuffer**.
 ## How it fits together
 
 ```
- Agent  ──MCP (stdio, JSON-RPC 2.0)──▶  tools/mcp-server (Node)
+ Agent  ──MCP (stdio, JSON-RPC 2.0)──▶  mcp-server (Node)
                                           │  spawns + supervises
                                           │  NDJSON JSON-RPC over a UNIX socket
                                           ▼
@@ -53,7 +53,7 @@ make SUBTARGET=tiny OSD=sdl \
      -j$(nproc)
 ```
 
-In a sandbox where `apt` is blocked, `tools/dev/bootstrap-headless-build.sh` stages the
+In a sandbox where `apt` is blocked, `mcp-server/bootstrap-headless-build.sh` stages the
 dependencies from GitHub/PyPI and prints the same command.
 
 ⚠️ **Build gotchas** (all explained in [`PLAN.md` §11.5](PLAN.md)):
@@ -68,7 +68,7 @@ dependencies from GitHub/PyPI and prints the same command.
 ### 2. Install the server
 
 ```bash
-cd tools/mcp-server && npm install
+cd mcp-server && npm install
 ```
 
 ### 3. Point it at your ROMs and run
@@ -77,7 +77,7 @@ cd tools/mcp-server && npm install
 export MAME_DIR=/path/to/mame-mcp        # defaults to the repo root
 export MAME_BINARY=$MAME_DIR/mametiny
 export MAME_ROMPATH=$MAME_DIR/roms
-node tools/mcp-server/src/index.mjs
+node mcp-server/src/index.mjs
 ```
 
 ### 4. Register with an MCP client
@@ -87,7 +87,7 @@ node tools/mcp-server/src/index.mjs
   "mcpServers": {
     "mame": {
       "command": "node",
-      "args": ["/path/to/mame-mcp/tools/mcp-server/src/index.mjs"],
+      "args": ["/path/to/mame-mcp/mcp-server/src/index.mjs"],
       "env": {
         "MAME_DIR": "/path/to/mame-mcp",
         "MAME_BINARY": "/path/to/mame-mcp/mametiny",
@@ -143,7 +143,7 @@ lua54 plugins/mcp/test/test_util.lua
 
 # 2. MCP protocol: tool registration, schemas, annotations, error handling.
 #    No MAME binary required.
-cd tools/mcp-server && node test/protocol.mjs
+cd mcp-server && node test/protocol.mjs
 
 # 3. End-to-end agent workflow. Needs a build and ROMs.
 MAME_SMOKE_DRIVER=wrally node test/smoke.mjs
@@ -221,7 +221,7 @@ tools invoked    : 67
 ALL TOOLS EXERCISED SUCCESSFULLY
 ```
 
-`tools/mcp-server/test/full-sweep.mjs` is a coverage audit rather than a workflow test:
+`mcp-server/test/full-sweep.mjs` is a coverage audit rather than a workflow test:
 it invokes **every registered tool** and fails if any is left uninvoked, so a tool cannot
 silently rot.
 
