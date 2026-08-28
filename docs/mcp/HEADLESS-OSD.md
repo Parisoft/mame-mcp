@@ -164,7 +164,7 @@ It also runs under `env -i` — no `SDL_VIDEODRIVER=dummy`, no `DISPLAY`, nothin
 
 | Check | Result |
 |---|---|
-| `-listfull` | 374 drivers |
+| `-listfull` | 374 entries (59 drivers + devices) |
 | boot `gridlee`, 2 emulated seconds | exit 0, **10879 %** of real time |
 | screenshot | valid 256×240 PNG |
 | WAV capture with `-sound none` | valid 48 kHz 2.0 s WAV |

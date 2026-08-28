@@ -653,7 +653,7 @@ The tools above are ordered by leverage for the stated goal. Ranked:
 
 Everything below was **measured**, not inferred. Environment: container with `DISPLAY` unset, no
 `/tmp/.X11-unix`, no `/dev/fb*`, no `/dev/dri`, no Xvfb, 2 cores, 3.9 GB RAM, no swap.
-Build: `SUBTARGET=tiny`, `OSD=sdl`, MAME 0.289, GCC 12.2.0. Binary: 92 MB, 374 drivers.
+Build: `SUBTARGET=tiny`, `OSD=sdl`, MAME 0.289, GCC 12.2.0. Binary: 92 MB, 374 `-listfull` entries (59 drivers plus devices).
 
 ### 11.1 Headline result
 

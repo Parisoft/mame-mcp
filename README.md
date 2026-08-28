@@ -79,29 +79,97 @@ Three layers, each there for a reason:
 
 ## Quick start
 
-### 1. Build
+### 1. Build a headless binary
+
+**Requirements:** a C++20 compiler (GCC 11+ or Clang 13+), GNU make, Python 3, and
+~10 GB of free disk. **No SDL, X11, fontconfig, Qt, OpenGL or pkg-config** — not even to
+compile. On a bare Debian/Ubuntu container that is:
+
+```bash
+apt-get install -y build-essential python3 git
+```
+
+Then:
 
 ```bash
 make OSD=headless SUBTARGET=tiny NOWERROR=1 -j$(nproc)
 ```
 
-No SDL, X11, fontconfig, Qt or OpenGL required — not even to compile.
+This produces **`./mametiny`** (~86 MB) in the repository root. Verify it:
 
-<details>
-<summary>Build notes</summary>
+```bash
+$ ldd mametiny          # should list only libc/libstdc++/libm/libgcc
+$ ./mametiny -help      # works with no DISPLAY set
+```
 
-* `NOWERROR=1` works around GCC 12 `-Werror=restrict` false positives in `fsmeta.cpp` and
-  `device.cpp`. It is a *generate*-time genie option, so it has no effect on an
-  already-generated tree.
-* Use `-j1` if you have less than ~3 GB of RAM per job: `emumem_aspace.cpp` and the sol2
-  translation units need more than 2 GB each, and will OOM-thrash otherwise.
-* `SUBTARGET=tiny` builds 374 drivers in ~1.5 h. Drop it for a full build (many hours).
-* In a sandbox where `apt` is blocked, `mcp-server/bootstrap-headless-build.sh` stages the
-  dependencies from GitHub/PyPI and prints the build command.
-* The older `OSD=sdl` path still works and is documented in
-  [`docs/mcp/README.md`](docs/mcp/README.md), but needs SDL2 + fontconfig + an EGL stub.
+#### The two flags that matter
 
-</details>
+| Flag | Why it is needed |
+|---|---|
+| `OSD=headless` | selects the display-free OSD. Without it you get the SDL OSD and its whole dependency chain. |
+| `NOWERROR=1` | GCC 12 emits `-Werror=restrict` false positives in `fsmeta.cpp` and `device.cpp`. This is a *generate*-time genie option, so it has no effect on an already-generated tree — if you first built without it, `rm -rf build/projects` before rebuilding. |
+
+#### Choosing what to build
+
+`SUBTARGET` controls how many systems are compiled in. This dominates both build time and
+binary size:
+
+| Build | Drivers | Binary | Time (2 cores) |
+|---|---|---|---|
+| `SUBTARGET=tiny` | 59 | 86 MB | ~1.5–2 h |
+| `SOURCES=<file.cpp>` | a handful | smaller | much faster |
+| full (no `SUBTARGET`) | ~43,000 | very large | many hours |
+
+For a specific game, compile only its driver — MAME derives the required CPUs, sound chips
+and video hardware automatically:
+
+```bash
+# one driver (World Rally)
+make OSD=headless SOURCES=src/mame/gaelco/wrally.cpp NOWERROR=1 -j$(nproc)
+
+# or a reusable list, one driver source per line
+printf 'gaelco/wrally.cpp\nexidy/circus.cpp\n' > src/mame/mcp.flt
+make OSD=headless SOURCEFILTER=src/mame/mcp.flt NOWERROR=1 -j$(nproc)
+```
+
+`SOURCES` and `SOURCEFILTER` are mutually exclusive. Both still produce `./mame`
+(or `./mametiny` if combined with `SUBTARGET=tiny`).
+
+⚠️ The `SUBTARGET=tiny` row is measured; the others are extrapolated. Savings are
+**not** proportional to driver count — a large part of the binary is the emulation core,
+file formats, Lua and the frontend, none of which shrink.
+
+#### Memory
+
+Budget **~3 GB of RAM per parallel job**. `emumem_aspace.cpp` and the sol2 translation
+units need more than 2 GB each; at `-j2` on a 4 GB machine the build will OOM-thrash and
+appear to hang. If you are tight on memory use `-j1`, or add swap.
+
+#### Reducing the binary
+
+The build keeps debug symbols by default:
+
+| | Size |
+|---|---|
+| as built | 86 MB |
+| `strip mametiny` | 65 MB |
+| stripped + `xz -9` | 9.7 MB |
+
+Stripping is safe but costs you readable stack traces if MAME crashes — a real trade-off
+for a debugging tool.
+
+#### If `apt` is unavailable
+
+In a locked-down sandbox, `mcp-server/bootstrap-headless-build.sh` stages what is needed
+from GitHub/PyPI, adds swap, and prints the build command. It exists because this project
+was developed in exactly that situation.
+
+#### The SDL build
+
+`OSD=sdl` still works and is unaffected by this fork, but needs SDL2, SDL2\_ttf,
+fontconfig and an EGL stub, plus `-DUSE_OZONE=1` to work around bgfx pulling in
+`X11/Xlib.h`. See [`docs/mcp/README.md`](docs/mcp/README.md). There is no reason to prefer
+it for agent use.
 
 ### 2. Install the server
 
