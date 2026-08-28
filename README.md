@@ -109,15 +109,29 @@ $ ./mametiny -help      # works with no DISPLAY set
 | `OSD=headless` | selects the display-free OSD. Without it you get the SDL OSD and its whole dependency chain. |
 | `NOWERROR=1` | GCC 12 emits `-Werror=restrict` false positives in `fsmeta.cpp` and `device.cpp`. This is a *generate*-time genie option, so it has no effect on an already-generated tree — if you first built without it, `rm -rf build/projects` before rebuilding. |
 
+> **Generate-time vs build-time.** `OSD`, `SUBTARGET`, `SOURCES`, `SOURCEFILTER`,
+> `NOWERROR` and every `NO_USE_*` flag are consumed by **genie** when it generates the
+> makefiles — not by `make` when it compiles. Adding one to a tree that was generated
+> without it silently does nothing. Whenever you change any of them:
+>
+> ```bash
+> rm -rf build/projects
+> ```
+>
+> Add `PYTHON_EXECUTABLE=python3` if bare `python` is not on your `PATH`. `SOURCES=` and
+> `SOURCEFILTER=` invoke `scripts/build/makedep.py` at generate time, so they fail early
+> without it.
+
 #### Choosing what to build
 
 `SUBTARGET` controls how many systems are compiled in. This dominates both build time and
 binary size:
 
-| Build | Drivers | Binary | Time (2 cores) |
+| Build | Machines | Binary | Time (2 cores) |
 |---|---|---|---|
 | `SUBTARGET=tiny` | 59 | 86 MB | ~1.5–2 h |
 | `SOURCES=<file.cpp>` | a handful | smaller | much faster |
+| `SOURCES=src/mame/konami` | 108 | — | ~2.5–3.5 h at `-j1` |
 | full (no `SUBTARGET`) | ~43,000 | very large | many hours |
 
 For a specific game, compile only its driver — MAME derives the required CPUs, sound chips
@@ -127,13 +141,23 @@ and video hardware automatically:
 # one driver (World Rally)
 make OSD=headless SOURCES=src/mame/gaelco/wrally.cpp NOWERROR=1 -j$(nproc)
 
+# a whole manufacturer directory -- makedep.py walks it for *.cpp
+make OSD=headless SOURCES=src/mame/konami NOWERROR=1 -j$(nproc)
+
 # or a reusable list, one driver source per line
 printf 'gaelco/wrally.cpp\nexidy/circus.cpp\n' > src/mame/mcp.flt
 make OSD=headless SOURCEFILTER=src/mame/mcp.flt NOWERROR=1 -j$(nproc)
 ```
 
-`SOURCES` and `SOURCEFILTER` are mutually exclusive. Both still produce `./mame`
-(or `./mametiny` if combined with `SUBTARGET=tiny`).
+`SOURCES` accepts a comma-separated list of `.cpp` files **or directories** — a directory
+is walked recursively (`scripts/build/makedep.py`, `collect_sources`). For example
+`SOURCES=src/mame/konami` selects 157 source files and 108 machines.
+
+`SOURCES` and `SOURCEFILTER` are mutually exclusive.
+
+⚠️ **Check the binary name.** Without `SUBTARGET=tiny` the output is **`./mame`**, not
+`./mametiny`. A build that looks like it "produced nothing" is usually this — point
+`MAME_BINARY` at the right file.
 
 ⚠️ The `SUBTARGET=tiny` row is measured; the others are extrapolated. Savings are
 **not** proportional to driver count — a large part of the binary is the emulation core,
@@ -143,7 +167,38 @@ file formats, Lua and the frontend, none of which shrink.
 
 Budget **~3 GB of RAM per parallel job**. `emumem_aspace.cpp` and the sol2 translation
 units need more than 2 GB each; at `-j2` on a 4 GB machine the build will OOM-thrash and
-appear to hang. If you are tight on memory use `-j1`, or add swap.
+appear to hang. If you are tight on memory use `-j1`, or add swap:
+
+```bash
+sudo dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none
+sudo chmod 600 /swapfile && sudo mkswap -q /swapfile && sudo swapon /swapfile
+```
+
+There is no progress indication while thrashing — the build simply stops advancing. If a
+`-j2` build appears stuck, check `free -m` before assuming it crashed.
+
+#### Troubleshooting
+
+**A build that "succeeds" without compiling anything.** An interrupted parallel build can
+leave a truncated object file behind. `make` then keeps re-archiving it and reports
+success — the tell is `Archiving libfrontend.a...` with zero files compiled, and a linker
+that either fails on missing symbols or produces a binary with no Lua engine. A real
+`luaengine.o` is ~10 MB; the broken one was **416 bytes with no symbols**:
+
+```bash
+ls -la build/linux_gcc/obj/x64/Release/src/frontend/luaengine.o   # suspiciously small?
+rm -rf build/linux_gcc/obj/x64/Release/src/frontend \
+       build/linux_gcc/bin/x64/Release/libfrontend.a
+```
+
+The same applies to any object left behind by an interrupted run; deleting the containing
+directory and its `.a` forces a clean rebuild of just that library.
+
+**`alsa/asoundlib.h: No such file or directory`.** See *If `apt` is unavailable* below —
+you need the `NO_USE_*` flags, and they only take effect after `rm -rf build/projects`.
+
+**A flag seems to be ignored.** It is almost certainly generate-time; see the note under
+*The two flags that matter*.
 
 #### Reducing the binary
 
@@ -171,7 +226,10 @@ make OSD=headless SUBTARGET=tiny PYTHON_EXECUTABLE=python3 NOWERROR=1 \
 
 `scripts/src/main.lua` links PortAudio/PortMidi based purely on these options, regardless
 of which OSD is selected, and building those 3rdparty libraries is what pulls in
-`alsa/asoundlib.h`.
+`alsa/asoundlib.h`. This is **not** a headless-specific problem — any build on a machine
+without ALSA headers hits it. `NO_USE_PULSEAUDIO` / `NO_USE_PIPEWIRE` are only needed for
+OSDs that compile those backends; the headless OSD compiles just
+`src/osd/modules/sound/none.cpp`, so `NO_USE_MIDI=1 NO_USE_PORTAUDIO=1` is sufficient.
 
 #### The SDL build
 
