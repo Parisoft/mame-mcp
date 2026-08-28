@@ -53,8 +53,9 @@ make SUBTARGET=tiny OSD=sdl \
      -j$(nproc)
 ```
 
-In a sandbox where `apt` is blocked, `mcp-server/bootstrap-headless-build.sh` stages the
-dependencies from GitHub/PyPI and prints the same command.
+In a sandbox where `apt` is blocked, no dependency staging is required: the headless OSD
+links only libc/libstdc++/libm/libgcc. The `NO_USE_*` flags above are what avoid needing
+ALSA headers.
 
 ⚠️ **Build gotchas** (all explained in [`PLAN.md` §11.5](PLAN.md)):
 

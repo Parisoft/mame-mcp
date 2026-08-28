@@ -160,9 +160,18 @@ for a debugging tool.
 
 #### If `apt` is unavailable
 
-In a locked-down sandbox, `mcp-server/bootstrap-headless-build.sh` stages what is needed
-from GitHub/PyPI, adds swap, and prints the build command. It exists because this project
-was developed in exactly that situation.
+The headless OSD needs no SDL, X11, EGL, fontconfig or Qt, so a locked-down sandbox needs
+no staged dependencies — only a compiler and Python. If ALSA headers are missing, disable
+the audio backends at *generate* time:
+
+```bash
+make OSD=headless SUBTARGET=tiny PYTHON_EXECUTABLE=python3 NOWERROR=1 \
+     NO_USE_MIDI=1 NO_USE_PORTAUDIO=1 NO_USE_PULSEAUDIO=1 NO_USE_PIPEWIRE=1 -j1
+```
+
+`scripts/src/main.lua` links PortAudio/PortMidi based purely on these options, regardless
+of which OSD is selected, and building those 3rdparty libraries is what pulls in
+`alsa/asoundlib.h`.
 
 #### The SDL build
 

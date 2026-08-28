@@ -6,7 +6,7 @@
 //
 //   MAME_SMOKE_DRIVER=gridlee node test/smoke.mjs
 //
-// Requires a built MAME (see mcp-server/bootstrap-headless-build.sh) and ROMs
+// Requires a built MAME (see README.md, Building) and ROMs
 // for the chosen driver under <repo>/roms. If the driver's ROMs are missing
 // MAME still boots with a checksum warning, which is enough for this test.
 

@@ -17,7 +17,7 @@ if [ -x ./mametiny ]; then
   [ -f "$HOME/.mcpdeps/env.sh" ] && source "$HOME/.mcpdeps/env.sh"
   ( cd mcp-server && MAME_ROMPATH="${MAME_ROMPATH:-$PWD/../roms}" node test/smoke.mjs ) || rc=1
 else
-  echo "   SKIP: ./mametiny not built (see mcp-server/bootstrap-headless-build.sh)"
+  echo "   SKIP: ./mametiny not built (see README.md, Building)"
 fi
 
 echo; echo "== 4/4 Full tool sweep: invoke every registered tool =="
