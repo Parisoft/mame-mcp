@@ -29,6 +29,7 @@
 !/samples/
 !/scripts/
 !/src/
+!/mcp-server/
 !/shaders/
 !/tests/
 !/doxygen/
@@ -49,3 +50,11 @@ regtests/chdman/temp
 regtests/jedutil/output
 /CMakeLists.txt
 /samples
+
+# mame-mcp: agent-generated artifacts and JS deps
+/mcp-server/node_modules/
+/mcp-server/package-lock.json
+/artifacts/
+*.wav
+*.avi
+*.trace

@@ -670,6 +670,7 @@ void device_debug::set_track_mem(bool value)
 	{
 		m_track_mem = value;
 		reinstall_all(read_or_write::WRITE);
+		compute_debug_flags();
 	}
 }
 
@@ -1651,6 +1652,7 @@ std::pair<offs_t, bool> device_debug::history_pc(int index) const
 void device_debug::set_track_pc(bool value)
 {
 	m_track_pc = value;
+	compute_debug_flags();
 }
 
 
@@ -1860,6 +1862,13 @@ void device_debug::compute_debug_flags()
 
 	// also call if we are tracing
 	if (m_trace != nullptr)
+		machine.debug_flags |= DEBUG_FLAG_CALL_HOOK;
+
+	// ...or recording PC/memory coverage, which is also done from
+	// instruction_hook(). Without this, set_track_pc(true) silently
+	// records nothing unless some other feature happens to have
+	// requested the hook.
+	if (m_track_pc || m_track_mem)
 		machine.debug_flags |= DEBUG_FLAG_CALL_HOOK;
 
 	// if we are stopping at a particular time and that time is within the current timeslice, we need to be called

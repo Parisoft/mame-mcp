@@ -1183,6 +1183,9 @@ end
 -- BX library objects
 --------------------------------------------------
 
+-- the headless OSD never renders, so skip BGFX entirely (its EGL
+-- header pulls in <X11/Xlib.h> on unix regardless of NO_X11)
+if _OPTIONS["osd"] ~= "headless" then
 project "bx"
 	uuid "238318fe-49f5-4eb4-88be-0618900f5eac"
 	kind "StaticLib"
@@ -1580,6 +1583,7 @@ end
 			"-D BGFX_CONFIG_MULTITHREADED=0",
 		}
 	end
+end -- osd ~= headless
 
 
 --------------------------------------------------

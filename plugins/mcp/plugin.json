@@ -1,0 +1,10 @@
+{
+  "plugin": {
+	"name": "mcp",
+	"description": "MCP bridge: JSON-RPC control surface for headless debugging",
+	"version": "0.1.0",
+	"author": "mame-mcp",
+	"type": "plugin",
+	"start": "false"
+  }
+}

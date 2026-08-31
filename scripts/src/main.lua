@@ -136,9 +136,12 @@ end
 	links {
 		"osd_" .. _OPTIONS["osd"],
 	}
-	links {
-		"qtdbg_" .. _OPTIONS["osd"],
-	}
+	-- the headless OSD has no Qt debugger project to link against
+	if _OPTIONS["osd"] ~= "headless" then
+		links {
+			"qtdbg_" .. _OPTIONS["osd"],
+		}
+	end
 --if (STANDALONE~=true) then
 	links {
 		"formats",
@@ -202,10 +205,17 @@ end
 			ext_lib("portmidi"),
 		}
 	end
+	-- BGFX is only needed by OSDs that actually render. Skipping it for
+	-- the headless OSD is what removes the X11 dependency: bgfx's EGL
+	-- header includes <X11/Xlib.h> on unix regardless of NO_X11.
+	if _OPTIONS["osd"] ~= "headless" then
+		links {
+			"bgfx",
+			"bimg",
+			"bx",
+		}
+	end
 	links {
-		"bgfx",
-		"bimg",
-		"bx",
 		"ocore_" .. _OPTIONS["osd"],
 	}
 

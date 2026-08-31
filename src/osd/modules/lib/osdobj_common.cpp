@@ -214,6 +214,7 @@ osd_common_t::~osd_common_t()
 
 void osd_common_t::register_options()
 {
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, FONT_OSX);
 	REGISTER_MODULE(m_mod_man, FONT_WINDOWS);
 	REGISTER_MODULE(m_mod_man, FONT_DWRITE);
@@ -222,8 +223,10 @@ void osd_common_t::register_options()
 #else
 	REGISTER_MODULE(m_mod_man, FONT_SDL);
 #endif
+#endif // OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, FONT_NONE);
 
+#ifndef OSD_HEADLESS
 #if defined(SDLMAME_EMSCRIPTEN)
 	REGISTER_MODULE(m_mod_man, RENDERER_SDL1); // don't bother trying to use video acceleration in browsers
 #endif
@@ -249,8 +252,10 @@ void osd_common_t::register_options()
 	REGISTER_MODULE(m_mod_man, RENDERER_SDL1);
 #endif
 #endif
+#endif // OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, RENDERER_NONE);
 
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, SOUND_WASAPI);
 	REGISTER_MODULE(m_mod_man, SOUND_XAUDIO2);
 	REGISTER_MODULE(m_mod_man, SOUND_COREAUDIO);
@@ -269,20 +274,26 @@ void osd_common_t::register_options()
 #ifndef NO_USE_PIPEWIRE
 	REGISTER_MODULE(m_mod_man, SOUND_PIPEWIRE);
 #endif
+#endif // OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, SOUND_NONE);
 
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, MONITOR_SDL);
 	REGISTER_MODULE(m_mod_man, MONITOR_WIN32);
 	REGISTER_MODULE(m_mod_man, MONITOR_DXGI);
 	REGISTER_MODULE(m_mod_man, MONITOR_MAC);
+#endif
+	REGISTER_MODULE(m_mod_man, MONITOR_NONE);
 
 #ifdef SDLMAME_MACOSX
 	REGISTER_MODULE(m_mod_man, DEBUG_OSX);
 #endif
 #ifndef OSD_MINI
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, DEBUG_WINDOWS);
 	REGISTER_MODULE(m_mod_man, DEBUG_QT);
 	REGISTER_MODULE(m_mod_man, DEBUG_IMGUI);
+#endif
 	REGISTER_MODULE(m_mod_man, DEBUG_GDBSTUB);
 	REGISTER_MODULE(m_mod_man, DEBUG_NONE);
 #endif
@@ -299,34 +310,42 @@ void osd_common_t::register_options()
 #if defined(OSD_SDL)
 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_SDL);
 #endif
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_RAWINPUT);
 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_DINPUT);
 	REGISTER_MODULE(m_mod_man, KEYBOARDINPUT_WIN32);
+#endif
 	REGISTER_MODULE(m_mod_man, KEYBOARD_NONE);
 
 #if defined(OSD_SDL)
 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_SDL);
 #endif
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_RAWINPUT);
 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_DINPUT);
 	REGISTER_MODULE(m_mod_man, MOUSEINPUT_WIN32);
+#endif
 	REGISTER_MODULE(m_mod_man, MOUSE_NONE);
 
 #if defined(OSD_SDL)
 	REGISTER_MODULE(m_mod_man, LIGHTGUNINPUT_SDL);
 #endif
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, LIGHTGUN_X11);
 	REGISTER_MODULE(m_mod_man, LIGHTGUNINPUT_RAWINPUT);
 	REGISTER_MODULE(m_mod_man, LIGHTGUNINPUT_WIN32);
+#endif
 	REGISTER_MODULE(m_mod_man, LIGHTGUN_NONE);
 
 #if defined(OSD_SDL)
 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_SDLGAME);
 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_SDLJOY);
 #endif
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_WINHYBRID);
 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_DINPUT);
 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_XINPUT);
+#endif
 #if !defined(OSD_SDL) && defined(USE_SDL_JOYSTICK)
 	REGISTER_MODULE(m_mod_man, JOYSTICKINPUT_SDLJOY);
 #endif
@@ -335,7 +354,9 @@ void osd_common_t::register_options()
 	REGISTER_MODULE(m_mod_man, OUTPUT_NONE);
 	REGISTER_MODULE(m_mod_man, OUTPUT_CONSOLE);
 	REGISTER_MODULE(m_mod_man, OUTPUT_NETWORK);
+#ifndef OSD_HEADLESS
 	REGISTER_MODULE(m_mod_man, OUTPUT_WIN32);
+#endif
 
 
 	// after initialization we know which modules are supported
